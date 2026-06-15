@@ -2,6 +2,7 @@ import { parseX509, formatDN, bytesToHex, X509Fields, DistinguishedName } from '
 import { verifySignature, VerifyResult } from './verify';
 import { lookupOID } from './oids';
 import { ASN1Node } from './asn1';
+import { ParsedCRL, findRevokedEntry, RevokedEntry } from './crl';
 
 export interface ParsedCert {
   pem: string;
@@ -26,6 +27,10 @@ export interface ChainStepResult {
   validityOk: boolean;
   validityError?: string;
   selfSigned: boolean;
+  crlChecked: boolean;
+  crlRevoked: boolean;
+  crlRevokedEntry?: RevokedEntry;
+  crlError?: string;
 }
 
 export interface ChainValidationResult {
@@ -96,7 +101,14 @@ export function buildChain(leaf: ParsedCert, intermediates: ParsedCert[], roots:
   return chain;
 }
 
-export async function validateChain(chain: ParsedCert[]): Promise<ChainValidationResult> {
+function findCRLForIssuer(crls: ParsedCRL[], issuer: DistinguishedName): ParsedCRL | undefined {
+  return crls.find((crl) => dnEqual(crl.issuer, issuer));
+}
+
+export async function validateChain(
+  chain: ParsedCert[],
+  crls: ParsedCRL[] = [],
+): Promise<ChainValidationResult> {
   if (chain.length === 0) {
     return { valid: false, chain: [], results: [], error: 'Empty chain' };
   }
@@ -116,6 +128,8 @@ export async function validateChain(chain: ParsedCert[]): Promise<ChainValidatio
       nameChainValid: true,
       validityOk: true,
       selfSigned,
+      crlChecked: false,
+      crlRevoked: false,
     };
 
     const now = new Date();
@@ -155,6 +169,18 @@ export async function validateChain(chain: ParsedCert[]): Promise<ChainValidatio
       result.signatureValid = false;
       result.signatureError = 'No parent certificate found in chain';
       allValid = false;
+    }
+
+    const matchingCRL = findCRLForIssuer(crls, cert.fields.issuer);
+    if (matchingCRL) {
+      result.crlChecked = true;
+      const serialHex = cert.fields.serialNumber.replace(/^0x/i, '').toUpperCase();
+      const revoked = findRevokedEntry(matchingCRL, serialHex);
+      if (revoked) {
+        result.crlRevoked = true;
+        result.crlRevokedEntry = revoked;
+        allValid = false;
+      }
     }
 
     results.push(result);

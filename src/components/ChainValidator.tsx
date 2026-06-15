@@ -1,16 +1,24 @@
-import { CheckCircle2, XCircle, Clock, Link, AlertTriangle, Play, ShieldCheck, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Link, AlertTriangle, Play, ShieldCheck, Loader2, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCertificateStore } from '@/store/certificateStore';
 import { ChainStepResult } from '@/utils/chain';
 
-function StepBadge({ valid, label }: { valid: boolean; label: string }) {
+function StepBadge({ valid, label, variant }: { valid: boolean; label: string; variant?: 'default' | 'warning' | 'danger' }) {
+  let variantClasses = valid
+    ? 'bg-emerald-500/15 text-emerald-400'
+    : 'bg-red-500/15 text-red-400';
+
+  if (variant === 'warning' && valid) {
+    variantClasses = 'bg-amber-500/15 text-amber-400';
+  } else if (variant === 'danger') {
+    variantClasses = 'bg-red-500/15 text-red-400';
+  }
+
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded',
-        valid
-          ? 'bg-emerald-500/15 text-emerald-400'
-          : 'bg-red-500/15 text-red-400'
+        variantClasses
       )}
     >
       {valid ? (
@@ -30,7 +38,23 @@ function ChainStep({
   result: ChainStepResult;
   isLast: boolean;
 }) {
-  const allValid = result.signatureValid && result.nameChainValid && result.validityOk;
+  const allValid =
+    result.signatureValid &&
+    result.nameChainValid &&
+    result.validityOk &&
+    !result.crlRevoked;
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'UTC',
+    }) + ' UTC';
+  };
 
   return (
     <div className="relative pl-8 pb-6">
@@ -84,7 +108,33 @@ function ChainStep({
             <StepBadge valid={result.nameChainValid} label="名称链" />
           )}
           <StepBadge valid={result.validityOk} label="有效期" />
+          {result.crlChecked && (
+            <StepBadge
+              valid={!result.crlRevoked}
+              label={result.crlRevoked ? '已吊销' : 'CRL 检查'}
+              variant="danger"
+            />
+          )}
         </div>
+
+        {result.crlRevoked && result.crlRevokedEntry && (
+          <div className="text-xs text-red-400 bg-red-500/10 rounded p-2 mt-2 border border-red-500/30">
+            <div className="flex items-start gap-2 mb-1">
+              <Ban className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium">证书已被吊销</div>
+                <div className="text-[11px] text-red-400/80 mt-0.5 font-mono">
+                  吊销时间: {formatDate(result.crlRevokedEntry.revocationDate)}
+                </div>
+                {result.crlRevokedEntry.reason && (
+                  <div className="text-[11px] text-red-400/80 mt-0.5">
+                    吊销原因: {result.crlRevokedEntry.reason}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {result.signatureError && (
           <div className="text-xs text-red-400 bg-red-500/10 rounded p-2 mt-2">
@@ -115,13 +165,15 @@ export default function ChainValidator() {
     leafCert,
     intermediateCerts,
     rootCerts,
+    crls,
     chainResult,
     runChainValidation,
     isVerifying,
     error,
   } = useCertificateStore();
 
-  const canValidate = leafCert && (intermediateCerts.length > 0 || rootCerts.length > 0);
+  const canValidate =
+    leafCert && (intermediateCerts.length > 0 || rootCerts.length > 0);
 
   if (!leafCert) {
     return (
@@ -165,6 +217,13 @@ export default function ChainValidator() {
           <p className="text-xs text-amber-400/80 flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
             请添加中间证书或根证书以进行链验证
+          </p>
+        )}
+
+        {crls.length > 0 && (
+          <p className="text-xs text-cyan-400/80 flex items-center gap-1.5 mt-2">
+            <Ban className="w-3.5 h-3.5" />
+            已加载 {crls.length} 个 CRL，验证时将检查证书吊销状态
           </p>
         )}
 
@@ -219,6 +278,11 @@ export default function ChainValidator() {
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
           <Clock className="w-10 h-10 mb-3 opacity-30" />
           <p className="text-sm">点击上方按钮运行链验证</p>
+          {crls.length > 0 && (
+            <p className="text-xs text-zinc-600 mt-1">
+              已加载 {crls.length} 个 CRL，将参与吊销检查
+            </p>
+          )}
         </div>
       )}
     </div>

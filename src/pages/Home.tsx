@@ -1,10 +1,12 @@
-import { Hexagon, Shield, Link, Terminal, FileKey, Github, Moon, Sun } from 'lucide-react';
+import { Hexagon, Shield, Link, Terminal, FileKey, Github, Moon, Sun, Sparkles, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CertificateInput from '@/components/CertificateInput';
 import ASN1Tree from '@/components/ASN1Tree';
 import X509Fields from '@/components/X509Fields';
 import ChainValidator from '@/components/ChainValidator';
 import OpenSSLExport from '@/components/OpenSSLExport';
+import CSRGenerator from '@/components/CSRGenerator';
+import CRLParser from '@/components/CRLParser';
 import { useCertificateStore, TabType } from '@/store/certificateStore';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -13,6 +15,8 @@ const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?
   { id: 'asn1', label: 'ASN.1 树', icon: Hexagon },
   { id: 'chain', label: '链验证', icon: Link },
   { id: 'openssl', label: 'OpenSSL 输出', icon: Terminal },
+  { id: 'csr', label: '生成 CSR', icon: Sparkles },
+  { id: 'crl', label: 'CRL 解析', icon: Ban },
 ];
 
 export default function Home() {
@@ -29,10 +33,16 @@ export default function Home() {
         return <ChainValidator />;
       case 'openssl':
         return <OpenSSLExport />;
+      case 'csr':
+        return <CSRGenerator />;
+      case 'crl':
+        return <CRLParser />;
       default:
         return null;
     }
   };
+
+  const showSidebar = ['x509', 'asn1', 'chain', 'openssl'].includes(activeTab);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -70,13 +80,15 @@ export default function Home() {
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4 flex flex-col lg:flex-row gap-4 overflow-hidden">
-        <aside className="lg:w-80 flex-shrink-0 flex flex-col lg:h-[calc(100vh-80px)] lg:sticky lg:top-20">
-          <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 flex-1 overflow-auto">
-            <CertificateInput />
-          </div>
-        </aside>
+        {showSidebar && (
+          <aside className="lg:w-80 flex-shrink-0 flex flex-col lg:h-[calc(100vh-80px)] lg:sticky lg:top-20">
+            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 flex-1 overflow-auto">
+              <CertificateInput />
+            </div>
+          </aside>
+        )}
 
-        <section className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <section className={cn('flex-1 min-w-0 flex flex-col overflow-hidden', !showSidebar && 'w-full')}>
           <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 flex flex-col h-[calc(100vh-80px)] overflow-hidden">
             <nav className="flex gap-1 p-2 border-b border-zinc-800 overflow-x-auto">
               {tabs.map((tab) => {
@@ -89,7 +101,11 @@ export default function Home() {
                     className={cn(
                       'flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg transition-all whitespace-nowrap',
                       isActive
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                        ? tab.id === 'csr'
+                          ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                          : tab.id === 'crl'
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 border border-transparent'
                     )}
                   >

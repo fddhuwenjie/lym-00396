@@ -541,4 +541,4 @@ export function parseX509(der: Uint8Array): { fields: X509Fields; asn1: ASN1Node
   };
 }
 
-export { formatDN, bytesToHex };
+export { formatDN, bytesToHex, parseDN, parseTime };
